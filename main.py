@@ -1,4 +1,6 @@
 import logging
+from pathlib import Path
+
 import pandas as pd
 import typer
 
@@ -8,6 +10,8 @@ def main(
     crsids_path: str,
     search_str: str,
     search_column_name: str = "Narrative #2",
+    amount_column_name: str = "Credit",
+    expected_amount: float = 12.0
 ):
     logging.basicConfig(level=logging.INFO)
     logging.info("EBC Payments")
@@ -21,9 +25,8 @@ def main(
         crsids = [i.strip().upper() for i in f.read().split("\n") if i.strip()]
 
     logging.info(f"Read {len(crsids)} crsids")
-
-    logging.info(f"Using search string '{search_str}'")
-    logging.info(f"Searching in column '{search_column_name}'")
+    logging.info(f"Using search string '{search_str}' in column '{search_column_name}'")
+    logging.info(f"Checking amounts >= {expected_amount} in column '{amount_column_name}'")
 
     # Filter transactions that contain the search string
     df_transactions = df_transactions[
@@ -33,6 +36,11 @@ def main(
     ]
 
     logging.info(f"Found {len(df_transactions)} matching transactions")
+
+    # Only consider transactions with enough amount
+    df_transactions = df_transactions[
+        df_transactions[amount_column_name] >= expected_amount
+    ]
 
     # Extract paid CRSIDs
     paid_crsids = {
@@ -47,7 +55,7 @@ def main(
 
     logging.info("Summary:")
     logging.info(f"Paid CRSIDs: {sorted(paid_crsids)}")
-    logging.info(f"Missing (claimed but not paid): {sorted(missing)}")
+    logging.info(f"Missing (claimed but not paid the correct amount): {sorted(missing)}")
     logging.info(f"Unexpected (paid but not claimed): {sorted(unexpected)}")
 
     print("\n=== PAYMENT CHECK RESULTS ===")
@@ -57,7 +65,7 @@ def main(
     print(f"Unexpected:      {len(unexpected)}\n")
 
     if missing:
-        print("❌ Missing payments:")
+        print("❌ Missing or underpaid payments:")
         for crsid in sorted(missing):
             print(f"  - {crsid}")
 
@@ -65,6 +73,13 @@ def main(
         print("\n⚠️  Unexpected payments:")
         for crsid in sorted(unexpected):
             print(f"  - {crsid}")
+
+    downloads_dir = Path.home() / "Downloads"
+    paid_csv_path = downloads_dir / "paid.csv"
+    pd.DataFrame(sorted(paid_crsids), columns=["crsid"]).to_csv(paid_csv_path, index=False)
+
+    logging.info(f"Saved paid CRSIDs to {paid_csv_path}")
+    print(f"\nSaved paid CRSIDs to: {paid_csv_path}")
 
 
 if __name__ == "__main__":
